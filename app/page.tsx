@@ -21,7 +21,11 @@ export default function Home() {
   const toolOutput = useWidgetProps<{
     name?: string;
     structuredContent?: MetroStatus;
+    _meta?: {
+      "openai/widgetDomain"?: string;
+    };
   }>();
+
   const maxHeight = useMaxHeight() ?? undefined;
   const displayMode = useDisplayMode();
   const requestDisplayMode = useRequestDisplayMode();
@@ -39,7 +43,14 @@ export default function Home() {
 
     // Fallback: Fetch real-time status independently if the webhook/iframe injection fails
     let isMounted = true;
-    fetch("/api/status")
+
+    // Athena SDK iframes require absolute URLs for the fallback to successfully hit our Vercel domain backend.
+    const domain =
+      toolOutput?._meta?.["openai/widgetDomain"] ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+    const apiUrl = `${domain}/api/status`.replace(/([^:]\/)\/+/g, "$1"); // prevent double slashes
+
+    fetch(apiUrl)
       .then((res) => res.json())
       .then((data) => {
         if (isMounted) setLiveStatuses(data);
