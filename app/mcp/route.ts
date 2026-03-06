@@ -3,6 +3,11 @@ import { createMcpHandler } from "mcp-handler";
 import * as cheerio from "cheerio";
 import { z } from "zod";
 
+const getAppsSdkCompatibleHtml = async (baseUrl: string, path: string) => {
+  const result = await fetch(`${baseUrl}${path}`);
+  return await result.text();
+};
+
 const getSTMStatus = async () => {
   try {
     const res = await fetch("https://www.stm.info/en/info/networks/metro", {
@@ -73,6 +78,8 @@ function widgetMeta(widget: ContentWidget) {
 }
 
 const handler = createMcpHandler(async (server: any) => {
+  const html = await getAppsSdkCompatibleHtml(baseURL, "/");
+
   const contentWidget: ContentWidget = {
     id: "get_metro_health",
     title: "Get Montreal Metro Health",
@@ -81,7 +88,36 @@ const handler = createMcpHandler(async (server: any) => {
     invoked: "Metro status retrieved",
     description:
       "Fetch the real-time service status for the Green, Orange, Yellow, and Blue lines of the STM (Montreal Metro).",
+    widgetDomain: baseURL,
   };
+
+  server.registerResource(
+    "content-widget",
+    contentWidget.templateUri,
+    {
+      title: contentWidget.title,
+      description: contentWidget.description,
+      mimeType: "text/html+skybridge",
+      _meta: {
+        "openai/widgetDescription": contentWidget.description,
+        "openai/widgetPrefersBorder": true,
+      },
+    },
+    async (uri: any) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: `<html>${html}</html>`,
+          _meta: {
+            "openai/widgetDescription": contentWidget.description,
+            "openai/widgetPrefersBorder": false,
+            "openai/widgetDomain": contentWidget.widgetDomain,
+          },
+        },
+      ],
+    }),
+  );
 
   server.registerTool(
     contentWidget.id,
