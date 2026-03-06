@@ -313,8 +313,11 @@ function buildWidgetHtml(allStationsJson: string): string {
   /* Departure rows */
   #dep-board{display:flex;flex-direction:column;gap:8px;overflow-y:auto;height:100%;}
   .dep-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;}
-  .dep-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-  .dep-line-badge{font-size:.7rem;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.04em;}
+  .dep-card-top{margin-bottom:10px;}
+  .dep-dest-header{display:flex;align-items:center;gap:8px;}
+  .dep-line-pip{display:inline-block;width:5px;height:22px;border-radius:3px;flex-shrink:0;}
+  .dep-destination{font-size:.88rem;font-weight:600;color:var(--text);}
+  .dep-toward{font-size:.72rem;color:var(--muted);font-weight:400;margin-right:2px;}
   .dep-direction{font-size:.75rem;color:var(--muted);}
   .dep-chips{display:flex;gap:9px;flex-wrap:wrap;}
   .dep-chip{display:flex;flex-direction:column;align-items:center;
@@ -620,51 +623,42 @@ function renderBoard(deps, station) {
     const isTermB = termConfig[line] === 'b'; // this station IS terminus B
 
     if (isTermA) {
-      // Terminal A: only trains toward B
       const card = document.createElement('div'); card.className = 'dep-card';
-      card.innerHTML = \`
-        <div class="dep-card-top">
-          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
-          <span class="dep-direction">\${tx('toward')} \${term.b}</span>
-        </div>
-        <div class="dep-chips">\${buildChips(times)}</div>\`;
+      card.innerHTML =
+        '<div class="dep-card-top"><div class="dep-dest-header">'
+        + '<span class="dep-line-pip" style="background:' + meta.color + '"></span>'
+        + '<span class="dep-destination"><span class="dep-toward">' + (lang==='fr'?'Vers':'Toward') + '</span> <strong>' + term.b + '</strong></span>'
+        + '</div></div><div class="dep-chips">' + buildChips(times) + '</div>';
       board.appendChild(card);
 
     } else if (isTermB) {
-      // Terminal B: only trains toward A
       const card = document.createElement('div'); card.className = 'dep-card';
-      card.innerHTML = \`
-        <div class="dep-card-top">
-          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
-          <span class="dep-direction">\${tx('toward')} \${term.a}</span>
-        </div>
-        <div class="dep-chips">\${buildChips(times)}</div>\`;
+      card.innerHTML =
+        '<div class="dep-card-top"><div class="dep-dest-header">'
+        + '<span class="dep-line-pip" style="background:' + meta.color + '"></span>'
+        + '<span class="dep-destination"><span class="dep-toward">' + (lang==='fr'?'Vers':'Toward') + '</span> <strong>' + term.a + '</strong></span>'
+        + '</div></div><div class="dep-chips">' + buildChips(times) + '</div>';
       board.appendChild(card);
 
     } else {
-      // Intermediate station: show BOTH directions with offset times
-      // Direction toward B (higher minute index trains)
       const towardB = times;
-      // Direction toward A: slightly offset (simulated opposite platform)
-      const offset = Math.floor(Math.random() * 3) + 2;
+      const offset  = Math.floor(Math.random() * 3) + 2;
       const towardA = times.map(m => Math.max(1, m + offset - 1));
 
       const cardB = document.createElement('div'); cardB.className = 'dep-card';
-      cardB.innerHTML = \`
-        <div class="dep-card-top">
-          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
-          <span class="dep-direction">→ \${term.b}</span>
-        </div>
-        <div class="dep-chips">\${buildChips(towardB)}</div>\`;
+      cardB.innerHTML =
+        '<div class="dep-card-top"><div class="dep-dest-header">'
+        + '<span class="dep-line-pip" style="background:' + meta.color + '"></span>'
+        + '<span class="dep-destination"><span class="dep-toward">&#8594; ' + (lang==='fr'?'Vers':'Toward') + '</span> <strong>' + term.b + '</strong></span>'
+        + '</div></div><div class="dep-chips">' + buildChips(towardB) + '</div>';
       board.appendChild(cardB);
 
       const cardA = document.createElement('div'); cardA.className = 'dep-card';
-      cardA.innerHTML = \`
-        <div class="dep-card-top">
-          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
-          <span class="dep-direction">← \${term.a}</span>
-        </div>
-        <div class="dep-chips">\${buildChips(towardA)}</div>\`;
+      cardA.innerHTML =
+        '<div class="dep-card-top"><div class="dep-dest-header">'
+        + '<span class="dep-line-pip" style="background:' + meta.color + '"></span>'
+        + '<span class="dep-destination"><span class="dep-toward">&#8592; ' + (lang==='fr'?'Vers':'Toward') + '</span> <strong>' + term.a + '</strong></span>'
+        + '</div></div><div class="dep-chips">' + buildChips(towardA) + '</div>';
       board.appendChild(cardA);
     }
   }
