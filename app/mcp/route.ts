@@ -91,9 +91,8 @@ const handler = createMcpHandler(async (server: any) => {
             <div class="container">
               <div class="map-container">
                 <img 
-                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Montreal-metro.svg/800px-Montreal-metro.svg.png" 
+                  src="\${contentWidget.widgetDomain}/montreal-metro.svg" 
                   alt="STM Map"
-                  referrerpolicy="no-referrer"
                 />
                 <div class="emergency-border" id="map-alert"></div>
               </div>
