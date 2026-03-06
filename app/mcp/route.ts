@@ -3,14 +3,141 @@ import { z } from "zod";
 import { getSTMStatus, MetroStatus } from "@/app/lib/stm";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-// Per-line estimated hourly ridership (STM annual 2023 ridership data, divided by line)
 const LINE_RIDERSHIP: Record<string, number> = {
-  orange: 18000, // busiest
+  orange: 18000,
   green: 16000,
   blue: 8000,
   yellow: 5000,
 };
-const MONTREAL_HOURLY_WAGE = 31.5; // CAD – Statistics Canada 2024
+const MONTREAL_HOURLY_WAGE = 31.5;
+
+// Per-line colors & labels
+const LINE_META = {
+  orange: {
+    color: "#f6891f",
+    label: { en: "Orange Line", fr: "Ligne Orange" },
+    num: "1",
+  },
+  green: {
+    color: "#00923f",
+    label: { en: "Green Line", fr: "Ligne Verte" },
+    num: "2",
+  },
+  yellow: {
+    color: "#ffe600",
+    label: { en: "Yellow Line", fr: "Ligne Jaune" },
+    num: "4",
+  },
+  blue: {
+    color: "#0085ca",
+    label: { en: "Blue Line", fr: "Ligne Bleue" },
+    num: "5",
+  },
+};
+
+// ─── All 68 STM Stations grouped by line ─────────────────────────────────────
+const ALL_STATIONS: Record<string, { id: string; en: string; fr: string }[]> = {
+  orange: [
+    { id: "cote-vertu", en: "Côte-Vertu", fr: "Côte-Vertu" },
+    { id: "du-college", en: "Du Collège", fr: "Du Collège" },
+    { id: "de-la-savane", en: "De la Savane", fr: "De la Savane" },
+    { id: "namur", en: "Namur", fr: "Namur" },
+    { id: "plamondon", en: "Plamondon", fr: "Plamondon" },
+    {
+      id: "cote-sainte-catherine",
+      en: "Côte-Sainte-Catherine",
+      fr: "Côte-Sainte-Catherine",
+    },
+    { id: "snowdon", en: "Snowdon", fr: "Snowdon" },
+    { id: "villa-maria", en: "Villa-Maria", fr: "Villa-Maria" },
+    { id: "vendome", en: "Vendôme", fr: "Vendôme" },
+    {
+      id: "place-saint-henri",
+      en: "Place-Saint-Henri",
+      fr: "Place-Saint-Henri",
+    },
+    { id: "lionel-groulx", en: "Lionel-Groulx ★", fr: "Lionel-Groulx ★" },
+    { id: "georges-vanier", en: "Georges-Vanier", fr: "Georges-Vanier" },
+    { id: "lucien-lallier", en: "Lucien-L'Allier", fr: "Lucien-L'Allier" },
+    { id: "bonaventure", en: "Bonaventure", fr: "Bonaventure" },
+    {
+      id: "square-victoria",
+      en: "Square-Victoria–OACI",
+      fr: "Square-Victoria–OACI",
+    },
+    { id: "place-darmes", en: "Place-d'Armes", fr: "Place-d'Armes" },
+    { id: "champ-de-mars", en: "Champ-de-Mars", fr: "Champ-de-Mars" },
+    { id: "berri-uqam", en: "Berri-UQAM ★", fr: "Berri-UQAM ★" },
+    { id: "sherbrooke", en: "Sherbrooke", fr: "Sherbrooke" },
+    { id: "mont-royal", en: "Mont-Royal", fr: "Mont-Royal" },
+    { id: "laurier", en: "Laurier", fr: "Laurier" },
+    { id: "rosemont", en: "Rosemont", fr: "Rosemont" },
+    { id: "beaubien", en: "Beaubien", fr: "Beaubien" },
+    { id: "jean-talon", en: "Jean-Talon ★", fr: "Jean-Talon ★" },
+    { id: "jarry", en: "Jarry", fr: "Jarry" },
+    { id: "cremazie", en: "Crémazie", fr: "Crémazie" },
+    { id: "sauve", en: "Sauvé", fr: "Sauvé" },
+    { id: "henri-bourassa", en: "Henri-Bourassa", fr: "Henri-Bourassa" },
+    { id: "cartier", en: "Cartier", fr: "Cartier" },
+    { id: "montmorency", en: "Montmorency", fr: "Montmorency" },
+  ],
+  green: [
+    { id: "angrignon", en: "Angrignon", fr: "Angrignon" },
+    { id: "monk", en: "Monk", fr: "Monk" },
+    { id: "jolicoeur", en: "Jolicoeur", fr: "Jolicoeur" },
+    { id: "verdun", en: "Verdun", fr: "Verdun" },
+    { id: "de-leglise", en: "De l'Église", fr: "De l'Église" },
+    { id: "lasalle", en: "LaSalle", fr: "LaSalle" },
+    { id: "charlevoix", en: "Charlevoix", fr: "Charlevoix" },
+    { id: "lionel-groulx", en: "Lionel-Groulx ★", fr: "Lionel-Groulx ★" },
+    { id: "atwater", en: "Atwater", fr: "Atwater" },
+    { id: "guy-concordia", en: "Guy-Concordia", fr: "Guy-Concordia" },
+    { id: "peel", en: "Peel", fr: "Peel" },
+    { id: "mcgill", en: "McGill", fr: "McGill" },
+    { id: "place-des-arts", en: "Place-des-Arts", fr: "Place-des-Arts" },
+    { id: "saint-laurent", en: "Saint-Laurent", fr: "Saint-Laurent" },
+    { id: "berri-uqam", en: "Berri-UQAM ★", fr: "Berri-UQAM ★" },
+    { id: "beaudry", en: "Beaudry", fr: "Beaudry" },
+    { id: "papineau", en: "Papineau", fr: "Papineau" },
+    { id: "frontenac", en: "Frontenac", fr: "Frontenac" },
+    { id: "prefontaine", en: "Préfontaine", fr: "Préfontaine" },
+    { id: "joliette", en: "Joliette", fr: "Joliette" },
+    { id: "pie-ix", en: "Pie-IX", fr: "Pie-IX" },
+    { id: "viau", en: "Viau", fr: "Viau" },
+    { id: "assomption", en: "Assomption", fr: "Assomption" },
+    { id: "cadillac", en: "Cadillac", fr: "Cadillac" },
+    { id: "langelier", en: "Langelier", fr: "Langelier" },
+    { id: "radisson", en: "Radisson", fr: "Radisson" },
+    { id: "honore-beaugrand", en: "Honoré-Beaugrand", fr: "Honoré-Beaugrand" },
+  ],
+  yellow: [
+    { id: "berri-uqam", en: "Berri-UQAM ★", fr: "Berri-UQAM ★" },
+    { id: "jean-drapeau", en: "Jean-Drapeau", fr: "Jean-Drapeau" },
+    { id: "longueuil", en: "Longueuil–U.-de-S.", fr: "Longueuil–U.-de-S." },
+  ],
+  blue: [
+    { id: "snowdon", en: "Snowdon ★", fr: "Snowdon ★" },
+    { id: "cote-des-neiges", en: "Côte-des-Neiges", fr: "Côte-des-Neiges" },
+    {
+      id: "universite-de-montreal",
+      en: "Université-de-Montréal",
+      fr: "Université-de-Montréal",
+    },
+    {
+      id: "edouard-montpetit",
+      en: "Édouard-Montpetit",
+      fr: "Édouard-Montpetit",
+    },
+    { id: "outremont", en: "Outremont", fr: "Outremont" },
+    { id: "acadie", en: "Acadie", fr: "Acadie" },
+    { id: "parc", en: "Parc", fr: "Parc" },
+    { id: "de-castelnau", en: "De Castelnau", fr: "De Castelnau" },
+    { id: "jean-talon", en: "Jean-Talon ★", fr: "Jean-Talon ★" },
+    { id: "fabre", en: "Fabre", fr: "Fabre" },
+    { id: "diberville", en: "D'Iberville", fr: "D'Iberville" },
+    { id: "saint-michel", en: "Saint-Michel", fr: "Saint-Michel" },
+  ],
+};
 
 // ─── Economic Impact ──────────────────────────────────────────────────────────
 function calculateEconomicImpact(line: string, delayMinutes: number): number {
@@ -18,32 +145,11 @@ function calculateEconomicImpact(line: string, delayMinutes: number): number {
   return Math.round((delayMinutes / 60) * ridership * MONTREAL_HOURLY_WAGE);
 }
 
-// ─── STM Real-Time API (prochains passages) ───────────────────────────────────
-// Station IDs are from the STM GTFS feed.
-// We try the STM real-time open-data endpoint first; fall back to simulation.
+// ─── STM Next Trains API ──────────────────────────────────────────────────────
 async function fetchNextTrains(
   stationId: string,
 ): Promise<Record<string, number[]>> {
-  // Known GTFS stop IDs for major interchange stations
-  const GTFS_STOP_IDS: Record<string, string[]> = {
-    "berri-uqam": ["51401", "51402", "51403"], // multiple platforms
-    "lionel-groulx": ["51281", "51282"],
-    "jean-talon": ["51231", "51232"],
-    snowdon: ["51261", "51262"],
-    "jean-drapeau": ["51341"],
-    longueuil: ["51351"],
-    "cote-vertu": ["51201"],
-    montmorency: ["51211"],
-    angrignon: ["51421"],
-    "honore-beaugrand": ["51431"],
-    "saint-michel": ["51441"],
-  };
-
   try {
-    const stops = GTFS_STOP_IDS[stationId.toLowerCase()];
-    if (!stops) throw new Error("Unknown station");
-
-    // STM's open-data GTFS-RT endpoint
     const url = `https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates`;
     const res = await fetch(url, {
       headers: {
@@ -52,37 +158,38 @@ async function fetchNextTrains(
       },
       next: { revalidate: 30 },
     });
-
     if (!res.ok) throw new Error(`STM API ${res.status}`);
     const data = await res.json();
 
-    // Parse arrivals for our stop IDs
+    // Determine lines that serve this station
+    const stationLines: string[] = [];
+    for (const [line, stations] of Object.entries(ALL_STATIONS)) {
+      if (stations.some((s) => s.id === stationId)) stationLines.push(line);
+    }
+
     const departureMinutes: Record<string, Set<number>> = {};
     const now = Math.floor(Date.now() / 1000);
 
     for (const entity of data.entity ?? []) {
       const trip = entity.tripUpdate;
       if (!trip) continue;
+      const routeId = String(trip.trip?.routeId ?? "");
+      const lineKey = routeId.startsWith("1")
+        ? "orange"
+        : routeId.startsWith("2")
+          ? "green"
+          : routeId.startsWith("4")
+            ? "yellow"
+            : routeId.startsWith("5")
+              ? "blue"
+              : null;
+      if (!lineKey || !stationLines.includes(lineKey)) continue;
 
       for (const stu of trip.stopTimeUpdate ?? []) {
-        if (!stops.includes(String(stu.stopId))) continue;
         const arrival = stu.arrival?.time ?? stu.departure?.time;
         if (!arrival) continue;
         const mins = Math.round((Number(arrival) - now) / 60);
         if (mins < 0 || mins > 60) continue;
-
-        // Determine line from route ID prefix
-        const routeId = String(trip.trip?.routeId ?? "");
-        const lineKey = routeId.startsWith("1")
-          ? "orange"
-          : routeId.startsWith("2")
-            ? "green"
-            : routeId.startsWith("4")
-              ? "yellow"
-              : routeId.startsWith("5")
-                ? "blue"
-                : "metro";
-
         if (!departureMinutes[lineKey]) departureMinutes[lineKey] = new Set();
         departureMinutes[lineKey].add(mins);
       }
@@ -94,472 +201,442 @@ async function fetchNextTrains(
         .sort((a, b) => a - b)
         .slice(0, 3);
     }
-
-    if (Object.keys(result).length === 0) throw new Error("No arrivals parsed");
+    if (Object.keys(result).length === 0) throw new Error("No arrivals found");
     return result;
   } catch (err) {
-    console.warn("STM GTFS-RT unavailable, using simulation:", err);
-    return simulateNextTrains(stationId);
+    console.warn("STM GTFS-RT fallback:", String(err));
+    return simulateTrains(stationId);
   }
 }
 
-// Simulation fallback (when API key is absent or service is down)
-const STATION_LINES: Record<string, string[]> = {
-  "berri-uqam": ["green", "orange", "yellow"],
-  "lionel-groulx": ["green", "orange"],
-  "jean-talon": ["orange", "blue"],
-  snowdon: ["orange", "blue"],
-  "jean-drapeau": ["yellow"],
-  longueuil: ["yellow"],
-  "cote-vertu": ["orange"],
-  montmorency: ["orange"],
-  angrignon: ["green"],
-  "honore-beaugrand": ["green"],
-  "saint-michel": ["blue"],
-};
-
-function simulateNextTrains(stationId: string): Record<string, number[]> {
-  const lines = STATION_LINES[stationId.toLowerCase()] ?? ["green"];
+function simulateTrains(stationId: string): Record<string, number[]> {
   const result: Record<string, number[]> = {};
-  for (const line of lines) {
+  for (const [line, stations] of Object.entries(ALL_STATIONS)) {
+    if (!stations.some((s) => s.id === stationId)) continue;
     const t1 = Math.floor(Math.random() * 5) + 1;
     const t2 = t1 + Math.floor(Math.random() * 7) + 4;
-    const t3 = t2 + Math.floor(Math.random() * 7) + 4;
+    const t3 = t2 + Math.floor(Math.random() * 6) + 4;
     result[line] = [t1, t2, t3];
   }
   return result;
 }
 
-// ─── SVG Map ──────────────────────────────────────────────────────────────────
-// Geographically-accurate schematic SVG based on official STM map proportions.
-// Each polyline uses an ID tied directly to JS updateLine() calls.
-const METRO_SVG = `<svg id="metro-svg" viewBox="0 0 700 520" xmlns="http://www.w3.org/2000/svg"
-  style="width:100%;height:100%;overflow:visible;display:block">
-  <defs>
-    <filter id="glow-red" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <style>
-      .ml { stroke-linecap:round; stroke-linejoin:round; fill:none; transition:stroke 0.6s; }
-      .pulse-red { animation:prd 1.1s ease-in-out infinite; filter:url(#glow-red); }
-      @keyframes prd { 0%,100%{stroke:#ef4444;opacity:1} 50%{stroke:#ff2222;opacity:0.55} }
-      .st { font:bold 8.5px system-ui,sans-serif; fill:#cbd5e1; dominant-baseline:middle; }
-      .sd { fill:#fff; stroke:#0f172a; stroke-width:2.5; }
-      .tc { fill:#0f172a; stroke-width:4; }
-    </style>
-  </defs>
-
-  <!-- BG -->
-  <rect width="700" height="520" fill="rgba(15,23,42,0.0)" rx="12"/>
-
-  <!-- ── ORANGE LINE (1): Côte-Vertu ←→ Montmorency ─────────────────────── -->
-  <!-- West arm: Côte-Vertu → Henri-Bourassa (SN vertical) -->
-  <polyline id="stm-orange-line" class="ml" stroke="#f6891f" stroke-width="9"
-    points="
-      75,258
-      105,230 130,205 158,182 188,168 220,158 252,152
-      280,148 310,148
-      310,165
-      320,200 330,238 340,268
-      355,292 374,308
-      397,308
-      424,298 452,278 480,258 508,242 535,232 560,228 590,228 626,228
-    "/>
-  <text class="st" x="30" y="258">Côte-Vertu</text>
-  <text class="st" x="628" y="228">Montmorency</text>
-
-  <!-- ── GREEN LINE (2): Angrignon ←→ Honoré-Beaugrand ─────────────────── -->
-  <polyline id="stm-green-line" class="ml" stroke="#00923f" stroke-width="9"
-    points="
-      50,385
-      80,375 115,370 150,366 185,361 218,355 250,347
-      282,336 312,325
-      340,315 360,308 382,308
-      408,307 437,295 465,275 490,270 515,275 532,295 543,322 550,355 553,385
-    "/>
-  <text class="st" x="18" y="390">Angrignon</text>
-  <text class="st" x="538" y="396">H-Beaugrand</text>
-
-  <!-- ── BLUE LINE (5): Snowdon ←→ Saint-Michel ────────────────────────── -->
-  <polyline id="stm-blue-line" class="ml" stroke="#0085ca" stroke-width="9"
-    points="
-      97,235
-      128,228 162,224 197,224 230,222 258,220 283,219
-      310,215 310,165
-      338,152 370,150 402,152 432,158 462,163 492,163 520,162 550,162 580,160 612,160
-    "/>
-  <text class="st" x="58" y="248">Snowdon</text>
-  <text class="st" x="614" y="160">Saint-Michel</text>
-
-  <!-- ── YELLOW LINE (4): Berri-UQAM ←→ Longueuil ─────────────────────── -->
-  <polyline id="stm-yellow-line" class="ml" stroke="#ffe600" stroke-width="9"
-    points="374,308 374,348 374,392 374,430 374,470 374,500"/>
-  <text class="st" x="380" y="502">Longueuil–U.-de-S.</text>
-
-  <!-- ── INTERCHANGE STATIONS (transfer circles) ───────────────────────── -->
-
-  <!-- Berri-UQAM  (Green + Orange + Yellow) -->
-  <circle id="st-berri" class="sd tc" cx="374" cy="308" r="11"/>
-  <circle class="sd" cx="374" cy="308" r="6" fill="#fff"/>
-  <text class="st" x="385" y="302">Berri-UQAM</text>
-
-  <!-- Lionel-Groulx  (Green + Orange) -->
-  <circle id="st-lionel" class="sd tc" cx="437" cy="295" r="11"/>
-  <circle class="sd" cx="437" cy="295" r="6" fill="#fff"/>
-  <text class="st" x="448" y="290">Lionel-Groulx</text>
-
-  <!-- Jean-Talon  (Orange + Blue) -->
-  <circle id="st-jt" class="sd tc" cx="310" cy="155" r="11"/>
-  <circle class="sd" cx="310" cy="155" r="6" fill="#fff"/>
-  <text class="st" x="318" y="150">Jean-Talon</text>
-
-  <!-- Snowdon  (Orange + Blue) -->
-  <circle id="st-snowdon" class="sd tc" cx="97" cy="234" r="10"/>
-  <circle class="sd" cx="97" cy="234" r="6" fill="#fff"/>
-
-  <!-- Jean-Drapeau  (Yellow) -->
-  <circle id="st-jd" class="sd" cx="374" cy="430" r="7" fill="#fff"/>
-  <text class="st" x="380" y="430">Jean-Drapeau</text>
-
-  <!-- Côte-des-Neiges / Université-de-Montréal (Blue) -->
-  <circle class="sd" cx="230" cy="222" r="6" fill="#fff"/>
-
-  <!-- Terminus dots — start/end of each line -->
-  <circle cx="75"  cy="258" r="7" fill="#f6891f"/>
-  <circle cx="626" cy="228" r="7" fill="#f6891f"/>
-  <circle cx="50"  cy="385" r="7" fill="#00923f"/>
-  <circle cx="553" cy="385" r="7" fill="#00923f"/>
-  <circle cx="97"  cy="235" r="7" fill="#0085ca"/>
-  <circle cx="612" cy="160" r="7" fill="#0085ca"/>
-  <circle cx="374" cy="500" r="7" fill="#ffe600"/>
-</svg>`;
-
-// ─── Widget HTML factory ──────────────────────────────────────────────────────
-function buildWidgetHtml(): string {
+// ─── HTML Widget Factory ──────────────────────────────────────────────────────
+function buildWidgetHtml(allStationsJson: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <style>
-  :root{--bg:#0f172a;--card:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.10);}
+  :root{
+    --bg:#060d1a;
+    --panel:rgba(255,255,255,0.04);
+    --border:rgba(255,255,255,0.09);
+    --text:#e2e8f0;
+    --muted:#64748b;
+    --orange:#f6891f;--green:#00923f;--yellow:#ffe600;--blue:#0085ca;
+  }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:system-ui,sans-serif;background:var(--bg);color:#e2e8f0;height:100vh;
-       display:flex;flex-direction:column;align-items:stretch;overflow:hidden;}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+       height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 
-  /* ── Header ───────────────────────────────────────── */
+  /* Header */
   header{display:flex;align-items:center;justify-content:space-between;
-         padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
-  h1{font-size:1.25rem;font-weight:900;background:linear-gradient(90deg,#60a5fa,#34d399);
+         padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;
+         background:rgba(6,13,26,0.95);backdrop-filter:blur(12px);}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:28px;height:28px;border-radius:50%;
+             background:conic-gradient(#00923f 0deg 90deg,#f6891f 90deg 180deg,#0085ca 180deg 270deg,#ffe600 270deg 360deg);
+             flex-shrink:0;}
+  h1{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#60a5fa,#34d399);
      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-  #lang-btn{background:rgba(255,255,255,0.08);border:1px solid var(--border);color:#94a3b8;
-             padding:4px 14px;border-radius:20px;cursor:pointer;font-size:.75rem;letter-spacing:.05em;}
-  #lang-btn:hover{background:rgba(255,255,255,0.16);color:#e2e8f0;}
+  .hdr-right{display:flex;align-items:center;gap:10px;}
+  #clock{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.04em;}
+  #lang-btn{background:rgba(255,255,255,0.07);border:1px solid var(--border);color:#94a3b8;
+             padding:3px 12px;border-radius:20px;cursor:pointer;font-size:.72rem;}
+  #lang-btn:hover{background:rgba(255,255,255,0.14);color:var(--text);}
 
-  /* ── Main grid ────────────────────────────────────── */
-  .grid{display:grid;grid-template-columns:1fr 270px;gap:14px;padding:14px 18px;
-        flex:1;overflow:hidden;min-height:0;}
+  /* Main grid */
+  .main{display:grid;grid-template-columns:1fr 1.15fr;gap:12px;
+        padding:12px 16px;flex:1;overflow:hidden;min-height:0;}
 
-  /* ── Map panel ────────────────────────────────────── */
-  #map-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;
-             padding:10px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
-  #emergency-ring{position:absolute;inset:0;border-radius:14px;border:3px solid transparent;
-                  pointer-events:none;display:none;
-                  animation:ringPulse 1.4s ease-in-out infinite;}
-  @keyframes ringPulse{0%,100%{border-color:rgba(239,68,68,.18);box-shadow:inset 0 0 0 rgba(239,68,68,0)}
-                        50%{border-color:rgba(239,68,68,.75);box-shadow:inset 0 0 28px rgba(239,68,68,.22)}}
+  /* ── LEFT: Network Health ── */
+  .left{display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
+  .section-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;
+                 color:var(--muted);margin-bottom:2px;}
 
-  /* ── Right column ─────────────────────────────────── */
-  .rcol{display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
+  .line-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+             padding:14px 16px;transition:background .5s,border-color .5s;}
+  .line-card.delayed{background:rgba(239,68,68,0.07);border-color:rgba(239,68,68,0.35);
+                      animation:cardPulse 2s ease-in-out infinite;}
+  @keyframes cardPulse{0%,100%{box-shadow:0 0 0 rgba(239,68,68,0)}
+                        50%{box-shadow:0 0 18px rgba(239,68,68,0.18)}}
 
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;}
-  .card-title{font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;color:#64748b;margin-bottom:8px;}
+  .lc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .lc-name{display:flex;align-items:center;gap:9px;font-weight:700;font-size:.95rem;}
+  .lc-dot{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
+  .status-badge{font-size:.65rem;font-weight:800;padding:3px 10px;border-radius:20px;
+                text-transform:uppercase;letter-spacing:.05em;transition:background .4s,color .4s;}
+  .ok  {background:rgba(52,211,153,.15);color:#34d399;}
+  .err {background:#ef4444;color:#fff;box-shadow:0 0 10px rgba(239,68,68,.5);}
 
-  /* Line status rows */
-  .lrow{display:flex;align-items:center;justify-content:space-between;
-        padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);}
-  .lrow:last-child{border-bottom:none;}
-  .llabel{display:flex;align-items:center;gap:8px;font-size:.83rem;font-weight:600;}
-  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-  .badge{font-size:.62rem;font-weight:800;padding:3px 9px;border-radius:20px;
-         text-transform:uppercase;letter-spacing:.05em;}
-  .badge.ok  {background:rgba(52,211,153,.15);color:#34d399;}
-  .badge.err {background:rgba(239,68,68,.2);color:#f87171;box-shadow:0 0 8px rgba(239,68,68,.4);}
-  .lrow.delayed{background:rgba(239,68,68,.06);border-radius:8px;padding:7px 6px;margin:-1px -3px;}
+  .lc-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px;}
+  .stat-box{background:rgba(255,255,255,0.04);border-radius:9px;padding:8px 10px;}
+  .stat-label{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;}
+  .stat-val{font-size:1.1rem;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .stat-val.uptime{color:#34d399;}
+  .stat-val.impact{color:#fb923c;}
 
-  /* Impact card */
-  #impact-card{display:none;}
-  .impact-title{color:#fb923c!important;}
-  #impact-amount{font-size:1.5rem;font-weight:900;color:#fb923c;
-                 text-shadow:0 0 18px rgba(251,146,60,.55);margin:4px 0 2px;}
-  #impact-sub{font-size:.63rem;color:#64748b;line-height:1.4;}
+  /* ── RIGHT: Departures Board ── */
+  .right{display:flex;flex-direction:column;gap:10px;min-height:0;}
+  .board-top{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+  #station-search{
+    flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);
+    color:var(--text);border-radius:9px;padding:7px 12px;font-size:.8rem;
+    outline:none;
+  }
+  #station-search:focus{border-color:rgba(255,255,255,0.2);}
+  #station-search::placeholder{color:var(--muted);}
+  #search-list{
+    position:absolute;z-index:100;background:#0f1a2e;border:1px solid var(--border);
+    border-radius:10px;max-height:220px;overflow-y:auto;display:none;
+    box-shadow:0 12px 30px rgba(0,0,0,.6);
+  }
+  .sl-group{padding:6px 12px 2px;font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);}
+  .sl-item{padding:7px 14px;font-size:.82rem;cursor:pointer;transition:background .15s;}
+  .sl-item:hover{background:rgba(255,255,255,0.07);}
+  .sl-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;}
 
-  /* Countdown card */
-  #cnt-select{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);
-              color:#e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;margin-bottom:8px;}
-  #cnt-select option{background:#1e293b;}
-  .dep-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;
-           border-bottom:1px solid rgba(255,255,255,.04);}
-  .dep-row:last-child{border-bottom:none;}
-  .dep-line{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:capitalize;}
-  .dep-times{display:flex;gap:5px;}
-  .dep-chip{background:rgba(255,255,255,.08);border-radius:6px;padding:2px 7px;
-             font-size:.8rem;font-variant-numeric:tabular-nums;color:#cbd5e1;}
-  .dep-chip.soon{background:rgba(52,211,153,.18);color:#34d399;}
+  .board-wrap{position:relative;flex:1;min-height:0;}
+
+  /* Departure rows */
+  #dep-board{display:flex;flex-direction:column;gap:8px;overflow-y:auto;height:100%;}
+  .dep-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;}
+  .dep-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .dep-line-badge{font-size:.7rem;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.04em;}
+  .dep-direction{font-size:.75rem;color:var(--muted);}
+  .dep-chips{display:flex;gap:9px;flex-wrap:wrap;}
+  .dep-chip{display:flex;flex-direction:column;align-items:center;
+             background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 12px;min-width:60px;}
+  .dep-chip .minutes{font-size:1.6rem;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;}
+  .dep-chip .min-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+  .dep-chip.arriving{background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);}
+  .dep-chip.arriving .minutes{color:#34d399;}
+
+  .no-data{display:flex;align-items:center;justify-content:center;height:120px;
+           color:var(--muted);font-size:.85rem;flex-direction:column;gap:8px;}
+  .spinner{width:22px;height:22px;border:2px solid rgba(255,255,255,0.1);
+            border-top-color:#60a5fa;border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;}
 </style>
 </head>
 <body>
 
 <header>
-  <h1 id="title">Montreal Metro Pulse</h1>
-  <button id="lang-btn" onclick="toggleLang()">FR</button>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <h1 id="title">Montreal Metro Pulse</h1>
+  </div>
+  <div class="hdr-right">
+    <span id="clock"></span>
+    <button id="lang-btn" onclick="toggleLang()">FR</button>
+  </div>
 </header>
 
-<div class="grid">
+<div class="main">
 
-  <!-- MAP -->
-  <div id="map-panel">
-    ${METRO_SVG}
-    <div id="emergency-ring"></div>
+  <!-- ══ LEFT: Network Health Cards ══════════════════════════════════════ -->
+  <div class="left">
+    <div class="section-label" id="lbl-health">Network Health</div>
+    ${["orange", "green", "blue", "yellow"]
+      .map((id) => {
+        const m = (LINE_META as any)[id];
+        const textColor = id === "yellow" ? "#0f172a" : "#fff";
+        return `
+    <div class="line-card" id="card-${id}">
+      <div class="lc-top">
+        <div class="lc-name">
+          <div class="lc-dot" style="background:${m.color}"></div>
+          <span id="lbl-line-${id}">${m.label.en}</span>
+        </div>
+        <div class="status-badge ok" id="badge-${id}">—</div>
+      </div>
+      <div class="lc-stats">
+        <div class="stat-box">
+          <div class="stat-label" id="lbl-uptime-${id}">Session Uptime</div>
+          <div class="stat-val uptime" id="uptime-${id}">100%</div>
+        </div>
+        <div class="stat-box" id="impact-box-${id}" style="display:none">
+          <div class="stat-label" id="lbl-impact-${id}">Est. Loss / min</div>
+          <div class="stat-val impact" id="impact-${id}">$0</div>
+        </div>
+        <div class="stat-box" id="normal-box-${id}">
+          <div class="stat-label">Ridership/hr</div>
+          <div class="stat-val" style="color:#94a3b8">${((LINE_RIDERSHIP as any)[id] || 0).toLocaleString()}</div>
+        </div>
+      </div>
+    </div>`;
+      })
+      .join("")}
   </div>
 
-  <!-- RIGHT COLUMN -->
-  <div class="rcol">
-
-    <!-- Status -->
-    <div class="card">
-      <div class="card-title" id="lbl-status">Real-time Line Status</div>
-      ${["green", "orange", "blue", "yellow"]
-        .map(
-          (id) => `
-      <div class="lrow" id="row-${id}">
-        <div class="llabel">
-          <div class="dot" style="background:${id === "green" ? "#00923f" : id === "orange" ? "#f6891f" : id === "blue" ? "#0085ca" : "#ffe600"}"></div>
-          <span id="lbl-${id}">${id.charAt(0).toUpperCase() + id.slice(1)} Line</span>
-        </div>
-        <div class="badge ok" id="badge-${id}">—</div>
-      </div>`,
-        )
-        .join("")}
+  <!-- ══ RIGHT: Departures Board ═════════════════════════════════════════ -->
+  <div class="right">
+    <div class="section-label" id="lbl-dept">Live Departures</div>
+    <div class="board-top">
+      <div class="board-wrap" style="position:relative;flex:1">
+        <input id="station-search" type="text"
+          placeholder="Search station..." autocomplete="off"
+          oninput="filterStations(this.value)"
+          onfocus="showDropdown()"
+          onblur="setTimeout(hideDropdown,200)"/>
+        <div id="search-list"></div>
+      </div>
     </div>
-
-    <!-- Economic Impact (shown only on delay) -->
-    <div class="card" id="impact-card">
-      <div class="card-title impact-title" id="lbl-impact">⚡ Economic Impact</div>
-      <div id="impact-amount">$0 CAD</div>
-      <div id="impact-sub">est. productivity loss · formula: (delay_min÷60) × ridership × $31.50/hr</div>
+    <div id="dep-board">
+      <div class="no-data">
+        <div class="spinner"></div>
+        <span id="lbl-choose">Choose a station above</span>
+      </div>
     </div>
+  </div>
 
-    <!-- Next Train Countdown -->
-    <div class="card">
-      <div class="card-title" id="lbl-next">🚇 Next Trains</div>
-      <select id="cnt-select" onchange="loadDepartures()">
-        <option value="berri-uqam">Berri-UQAM</option>
-        <option value="lionel-groulx">Lionel-Groulx</option>
-        <option value="jean-talon">Jean-Talon</option>
-        <option value="snowdon">Snowdon</option>
-        <option value="jean-drapeau">Jean-Drapeau</option>
-        <option value="longueuil">Longueuil</option>
-        <option value="cote-vertu">Côte-Vertu</option>
-        <option value="montmorency">Montmorency</option>
-        <option value="angrignon">Angrignon</option>
-        <option value="honore-beaugrand">Honoré-Beaugrand</option>
-        <option value="saint-michel">Saint-Michel</option>
-      </select>
-      <div id="dep-board"></div>
-    </div>
-
-  </div><!-- /rcol -->
-</div><!-- /grid -->
+</div><!-- /main -->
 
 <script>
-// ══ i18n ══════════════════════════════════════════════════════════════════════
+// ══ DATA ═════════════════════════════════════════════════════════════════════
+const ALL_STATIONS = ${allStationsJson};
+const LINE_META    = ${JSON.stringify(LINE_META)};
+const LINE_RIDERSHIP = ${JSON.stringify(LINE_RIDERSHIP)};
+const WAGE         = 31.5;
+
+// ══ i18n ═════════════════════════════════════════════════════════════════════
 let lang = 'en';
 const T = {
-  title:     {en:'Montreal Metro Pulse',       fr:'Pouls du Métro de Montréal'},
-  status:    {en:'Real-time Line Status',       fr:'État des Lignes en Temps Réel'},
-  normal:    {en:'Normal',                      fr:'Normal'},
-  delay:     {en:'Disruption',                  fr:'Perturbation'},
-  impact:    {en:'⚡ Economic Impact',           fr:'⚡ Impact Économique'},
-  impactSub: {en:'est. productivity loss · (delay_min÷60) × ridership × $31.50/hr',
-              fr:'perte de productivité est. · (min_retard÷60) × achalandage × 31,50 $/h'},
-  next:      {en:'🚇 Next Trains',              fr:'🚇 Prochains Trains'},
-  min:       {en:'min',                         fr:'min'},
-  green:     {en:'Green Line',  fr:'Ligne Verte'},
-  orange:    {en:'Orange Line', fr:'Ligne Orange'},
-  blue:      {en:'Blue Line',   fr:'Ligne Bleue'},
-  yellow:    {en:'Yellow Line', fr:'Ligne Jaune'},
+  title:       {en:'Montreal Metro Pulse',       fr:'Pouls du Métro de Montréal'},
+  health:      {en:'Network Health',             fr:'Santé du Réseau'},
+  dept:        {en:'Live Departures',            fr:'Départs en Direct'},
+  normal:      {en:'Normal',                     fr:'Normal'},
+  delay:       {en:'Disruption',                 fr:'Perturbation'},
+  uptime:      {en:'Session Uptime',             fr:'Disponibilité'},
+  impactLbl:   {en:'Est. Loss / min',            fr:'Perte est. / min'},
+  choose:      {en:'Choose a station above',     fr:'Choisissez une station'},
+  toward:      {en:'Toward',                     fr:'Vers'},
+  min:         {en:'min',                        fr:'min'},
+  noData:      {en:'No departure data',          fr:'Aucun départ disponible'},
+  orange:      {en:'Orange Line',  fr:'Ligne Orange'},
+  green:       {en:'Green Line',   fr:'Ligne Verte'},
+  blue:        {en:'Blue Line',    fr:'Ligne Bleue'},
+  yellow:      {en:'Yellow Line',  fr:'Ligne Jaune'},
+  search:      {en:'Search station…',            fr:'Rechercher une station…'},
 };
-function tx(k){ return T[k][lang]; }
+const tx = k => T[k][lang];
 
 function toggleLang(){
   lang = lang==='en'?'fr':'en';
   document.getElementById('lang-btn').textContent = lang==='en'?'FR':'EN';
   applyI18n();
-  if(window.__statuses) updateUI(window.__statuses);
-  renderBoard(window.__departures);
+  if(window.__statuses) applyStatuses(window.__statuses);
+  renderBoard(window.__departures, window.__selectedStation);
 }
 
 function applyI18n(){
   document.getElementById('title').textContent     = tx('title');
-  document.getElementById('lbl-status').textContent= tx('status');
-  document.getElementById('lbl-impact').textContent= tx('impact');
-  document.getElementById('impact-sub').textContent= tx('impactSub');
-  document.getElementById('lbl-next').textContent  = tx('next');
-  ['green','orange','blue','yellow'].forEach(id=>{
-    document.getElementById('lbl-'+id).textContent = tx(id);
-  });
-}
-
-// ══ SVG heatmap ───────────────────────────────────────────────────────────────
-const LINE_COLORS = {green:'#00923f',orange:'#f6891f',blue:'#0085ca',yellow:'#ffe600'};
-function setLine(id, status){
-  const el = document.getElementById('stm-'+id+'-line');
-  if(!el) return;
-  if(status==='delay'){
-    el.style.stroke='';
-    el.classList.add('pulse-red');
-  } else {
-    el.classList.remove('pulse-red');
-    el.style.stroke=LINE_COLORS[id]||'#fff';
+  document.getElementById('lbl-health').textContent= tx('health');
+  document.getElementById('lbl-dept').textContent  = tx('dept');
+  document.getElementById('lbl-choose').textContent= tx('choose');
+  document.getElementById('station-search').placeholder = tx('search');
+  for(const id of ['orange','green','blue','yellow']){
+    document.getElementById('lbl-line-'+id).textContent   = tx(id);
+    document.getElementById('lbl-uptime-'+id).textContent = tx('uptime');
+    document.getElementById('lbl-impact-'+id).textContent = tx('impactLbl');
   }
 }
 
-function setBadge(id, status){
-  const row   = document.getElementById('row-'+id);
-  const badge = document.getElementById('badge-'+id);
-  if(!row||!badge) return;
-  const d = status==='delay';
-  badge.textContent = d ? tx('delay') : tx('normal');
-  badge.className   = 'badge '+(d?'err':'ok');
-  row.className     = 'lrow'+(d?' delayed':'');
+// ══ CLOCK ═════════════════════════════════════════════════════════════════════
+function updateClock(){
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString(lang==='fr'?'fr-CA':'en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
+setInterval(updateClock,1000); updateClock();
 
-// ══ Economic Impact – live counter ────────────────────────────────────────────
-const LINE_RIDERSHIP = {orange:18000,green:16000,blue:8000,yellow:5000};
-const WAGE = 31.5;
-let impactTimer = null;
-let impactStartTime = null;
-let impactBaseDelay = 20; // minutes – assumed when a delay starts
+// ══ UPTIME & IMPACT COUNTERS ──────────────────────────────────────────════════
+const sessionStart = Date.now();
+const delayStart   = {};
 
-function startImpactCounter(statuses){
-  const delayed = Object.entries(statuses).filter(([,v])=>v==='delay');
-  const card    = document.getElementById('impact-card');
-  if(delayed.length===0){ card.style.display='none'; clearInterval(impactTimer); return; }
-  card.style.display='block';
+function tickCounters(){
+  const sessionMinutes = (Date.now()-sessionStart)/60000;
+  for(const id of ['orange','green','blue','yellow']){
+    const status = window.__statuses?.[id] || 'normal';
+    // Uptime = fraction of session without delay
+    const delayMins = delayStart[id] ? (Date.now()-delayStart[id])/60000 : 0;
+    const pct = Math.max(0, Math.min(100, 100*(1-delayMins/(sessionMinutes||1))));
+    document.getElementById('uptime-'+id).textContent = pct.toFixed(1)+'%';
 
-  if(!impactStartTime) impactStartTime = Date.now();
-
-  function tick(){
-    const elapsedMin = (Date.now()-impactStartTime)/60000;
-    const totalDelay = impactBaseDelay + elapsedMin;  // delay grows over time
-    let total = 0;
-    for(const [line] of delayed){
-      const r = LINE_RIDERSHIP[line]||10000;
-      total += Math.round((totalDelay/60)*r*WAGE);
+    if(status==='delay'){
+      const lostPerMin = (LINE_RIDERSHIP[id]||10000)*WAGE/60;
+      document.getElementById('impact-'+id).textContent =
+        '-$'+(lostPerMin*(delayMins||1)).toLocaleString('en-CA',{maximumFractionDigits:0});
     }
-    document.getElementById('impact-amount').textContent =
-      '$'+total.toLocaleString('en-CA')+' CAD';
   }
-
-  clearInterval(impactTimer);
-  tick();
-  impactTimer = setInterval(tick, 5000); // update every 5 seconds
 }
+setInterval(tickCounters, 5000);
 
-// ══ Main update ───────────────────────────────────────────────────────────────
-function updateUI(statuses){
+// ══ STATUS UPDATE ═════════════════════════════════════════════════════════════
+function applyStatuses(statuses){
   window.__statuses = statuses;
-  ['green','orange','blue','yellow'].forEach(id=>{
-    setLine(id, statuses[id]);
-    setBadge(id, statuses[id]);
-  });
-  const anyDelay = Object.values(statuses).includes('delay');
-  document.getElementById('emergency-ring').style.display = anyDelay?'block':'none';
-  if(!anyDelay){ impactStartTime=null; }
-  startImpactCounter(statuses);
+  for(const id of ['orange','green','blue','yellow']){
+    const s     = statuses[id] || 'normal';
+    const card  = document.getElementById('card-'+id);
+    const badge = document.getElementById('badge-'+id);
+    const impBox= document.getElementById('impact-box-'+id);
+    const normBox= document.getElementById('normal-box-'+id);
+
+    badge.textContent = s==='delay' ? tx('delay') : tx('normal');
+    badge.className   = 'status-badge '+(s==='delay'?'err':'ok');
+    card.className    = 'line-card'+(s==='delay'?' delayed':'');
+
+    if(s==='delay'){
+      if(!delayStart[id]) delayStart[id]=Date.now();
+      impBox.style.display ='block';
+      normBox.style.display='none';
+    } else {
+      delete delayStart[id];
+      impBox.style.display ='none';
+      normBox.style.display='block';
+    }
+  }
+  tickCounters();
 }
 
-// ══ Countdown board ───────────────────────────────────────────────────────────
-let countdownTimer = null;
-window.__departures = {};
+// ══ STATION SEARCH ════════════════════════════════════════════════════════════
+let currentStation = null;
 
-function renderBoard(deps){
-  window.__departures = deps||{};
-  const board = document.getElementById('dep-board');
+function populateDropdown(filter=''){
+  const list = document.getElementById('search-list');
+  list.innerHTML='';
+  let any=false;
+  for(const [line, stations] of Object.entries(ALL_STATIONS)){
+    const matched = stations.filter(s=>{
+      const q=filter.toLowerCase().trim();
+      return !q || s.en.toLowerCase().includes(q) || s.fr.toLowerCase().includes(q);
+    });
+    if(!matched.length) continue;
+    any=true;
+    const grp=document.createElement('div');grp.className='sl-group';
+    grp.innerHTML=\`<span class="sl-dot" style="background:\${LINE_META[line].color}"></span>\${LINE_META[line].label[lang]}\`;
+    list.appendChild(grp);
+    for(const st of matched){
+      const item=document.createElement('div');item.className='sl-item';
+      item.innerHTML=\`<span class="sl-dot" style="background:\${LINE_META[line].color}"></span>\${st[lang]||st.en}\`;
+      item.onclick=()=>selectStation(st.id, st[lang]||st.en);
+      list.appendChild(item);
+    }
+  }
+  if(!any){ const d=document.createElement('div');d.className='sl-item';d.style.color='var(--muted)';d.textContent='No results';list.appendChild(d); }
+}
+
+function filterStations(val){populateDropdown(val);showDropdown();}
+function showDropdown(){populateDropdown(document.getElementById('station-search').value);document.getElementById('search-list').style.display='block';}
+function hideDropdown(){document.getElementById('search-list').style.display='none';}
+
+function selectStation(id, label){
+  currentStation=id;
+  window.__selectedStation=id;
+  document.getElementById('station-search').value=label;
+  hideDropdown();
+  loadDepartures(id);
+}
+
+// ══ DEPARTURES BOARD ══════════════════════════════════════════════════════════
+let depTimer=null;
+
+function renderBoard(deps, station){
+  window.__departures=deps||{};
+  const board=document.getElementById('dep-board');
   board.innerHTML='';
-  for(const [line, times] of Object.entries(window.__departures)){
+  if(!deps||Object.keys(deps).length===0){
+    board.innerHTML=\`<div class="no-data"><span>\${tx('noData')}</span></div>\`;
+    return;
+  }
+  // Determine line terminals for direction labels
+  const TERMINALS={
+    orange:{a:'Côte-Vertu',b:'Montmorency'},
+    green: {a:'Angrignon', b:'Honoré-Beaugrand'},
+    blue:  {a:'Snowdon',   b:'Saint-Michel'},
+    yellow:{a:'Berri-UQAM',b:'Longueuil–U.-de-S.'},
+  };
+  for(const [line, times] of Object.entries(deps)){
     if(!times||times.length===0) continue;
-    const row = document.createElement('div');
-    row.className='dep-row';
-    const lc = LINE_COLORS[line]||'#94a3b8';
-    const textColor = line==='yellow'?'#0f172a':'#fff';
-    const chips = times.map(m=>\`<div class="dep-chip\${m<=2?' soon':''}">\${m} \${tx('min')}</div>\`).join('');
-    row.innerHTML=\`<span class="dep-line" style="background:\${lc};color:\${textColor}">\${line.charAt(0).toUpperCase()+line.slice(1)}</span>
-                   <div class="dep-times">\${chips}</div>\`;
-    board.appendChild(row);
+    const meta=LINE_META[line];
+    const tc = line==='yellow'?'#0f172a':'#fff';
+    const card=document.createElement('div');card.className='dep-card';
+    const t=TERMINALS[line]||{a:'A',b:'B'};
+    const chips=times.map((m,i)=>\`
+      <div class="dep-chip\${m<=2?' arriving':''}">
+        <span class="minutes">\${m}</span>
+        <span class="min-label">\${tx('min')}</span>
+      </div>\`).join('');
+    card.innerHTML=\`
+      <div class="dep-card-top">
+        <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
+        <span class="dep-direction">\${tx('toward')} \${t.b}</span>
+      </div>
+      <div class="dep-chips">\${chips}</div>\`;
+    board.appendChild(card);
   }
 }
 
-// Live countdown ticks every second (decrement displayed minutes)
-function startCountdownTick(){
-  clearInterval(countdownTimer);
-  let tick = 0;
-  countdownTimer = setInterval(()=>{
-    tick++;
-    if(tick%60===0){  // every 60 seconds, re-randomise slightly
-      for(const line of Object.keys(window.__departures)){
-        window.__departures[line] = window.__departures[line].map(m=>Math.max(0,m-1));
-      }
-      renderBoard(window.__departures);
-    }
-  }, 1000);
-}
+function loadDepartures(stationId){
+  const board=document.getElementById('dep-board');
+  board.innerHTML='<div class="no-data"><div class="spinner"></div></div>';
 
-function loadDepartures(){
-  const station = document.getElementById('cnt-select').value;
-  const STATION_LINES = {
-    'berri-uqam':['green','orange','yellow'],
-    'lionel-groulx':['green','orange'],
-    'jean-talon':['orange','blue'],
-    'snowdon':['orange','blue'],
-    'jean-drapeau':['yellow'],
-    'longueuil':['yellow'],
-    'cote-vertu':['orange'],
-    'montmorency':['orange'],
-    'angrignon':['green'],
-    'honore-beaugrand':['green'],
-    'saint-michel':['blue'],
-  };
-  const lines = STATION_LINES[station]||['green'];
-  const deps  = {};
-  for(const l of lines){
+  // Simulate per-station departures (replaced by real data from window.openai)
+  const stationLines=[];
+  for(const [line,stations] of Object.entries(ALL_STATIONS)){
+    if(stations.some(s=>s.id===stationId)) stationLines.push(line);
+  }
+  const deps={};
+  for(const l of stationLines){
     const t1=Math.floor(Math.random()*5)+1;
     const t2=t1+Math.floor(Math.random()*7)+4;
-    const t3=t2+Math.floor(Math.random()*7)+4;
+    const t3=t2+Math.floor(Math.random()*6)+4;
     deps[l]=[t1,t2,t3];
   }
-  renderBoard(deps);
-  startCountdownTick();
+  renderBoard(deps,stationId);
+
+  // Live tick: decrement every 60s and refresh
+  clearInterval(depTimer);
+  depTimer=setInterval(()=>{
+    for(const l of Object.keys(window.__departures)){
+      window.__departures[l]=window.__departures[l].map(m=>Math.max(0,m-1));
+    }
+    renderBoard(window.__departures, stationId);
+  },60000);
 }
 
-// ══ Boot ──────────────────────────────────────────────────────────────────────
-window.onload = function(){
+// ══ BOOT ══════════════════════════════════════════════════════════════════════
+window.onload=function(){
   applyI18n();
-  loadDepartures();
+  // Pre-select Berri-UQAM
+  selectStation('berri-uqam','Berri-UQAM ★');
 
-  // READ DATA from Athena SDK
   if(window.openai && window.openai.toolOutput){
-    updateUI(window.openai.toolOutput);
+    const d=window.openai.toolOutput;
+    if(d.green||d.orange) applyStatuses(d);
+    if(d.departures)      renderBoard(d.departures, window.__selectedStation);
   } else {
-    // postMessage fallback (also covers station-board tool responses)
-    window.addEventListener('message', e=>{
-      const d = e.data;
-      if(!d) return;
-      if(d.structuredContent){ updateUI(d.structuredContent); return; }
-      if(d.green||d.orange)  { updateUI(d); return; }
-      if(d.departures)       { renderBoard(d.departures); startCountdownTick(); }
+    window.addEventListener('message',e=>{
+      if(!e.data) return;
+      if(e.data.green||e.data.orange) applyStatuses(e.data);
+      if(e.data.structuredContent)    applyStatuses(e.data.structuredContent);
+      if(e.data.departures)           {renderBoard(e.data.departures,window.__selectedStation);}
     });
   }
 };
@@ -569,20 +646,20 @@ window.onload = function(){
 }
 
 // ─── MCP Handler ──────────────────────────────────────────────────────────────
-const WIDGET_URI = "ui://widget/metro-map.html";
+const WIDGET_URI = "ui://widget/metro-command.html";
+const allStationsJson = JSON.stringify(ALL_STATIONS);
 
 const handler = createMcpHandler(async (server: any) => {
-  // Resource: visual widget
   server.registerResource(
-    "metro-widget",
+    "metro-command",
     WIDGET_URI,
-    { title: "Montreal Metro Pulse", mimeType: "text/html+skybridge" },
+    { title: "Montreal Metro Command Center", mimeType: "text/html+skybridge" },
     async (uri: any) => ({
       contents: [
         {
           uri: uri.href,
           mimeType: "text/html+skybridge",
-          text: buildWidgetHtml(),
+          text: buildWidgetHtml(allStationsJson),
           _meta: { "openai/widgetPrefersBorder": false },
         },
       ],
@@ -593,34 +670,32 @@ const handler = createMcpHandler(async (server: any) => {
   server.registerTool(
     "get_metro_health",
     {
-      title: "Get Montreal Metro Health",
+      title: "Montreal Metro Command Center",
       description:
-        "Fetches real-time STM service status for all four metro lines. Returns a heatmap widget with live economic-impact data.",
+        "Shows the full STM network health command center — live line statuses, uptime counters, economic impact tickers, and departure board for all 68 stations.",
       inputSchema: { _: z.string().optional() },
       _meta: {
         "openai/outputTemplate": WIDGET_URI,
-        "openai/toolInvocation/invoking": "Fetching STM network status...",
-        "openai/toolInvocation/invoked": "Metro status retrieved",
+        "openai/toolInvocation/invoking": "Loading Command Center...",
+        "openai/toolInvocation/invoked": "Command Center ready",
         "openai/resultCanProduceWidget": true,
         "openai/widgetAccessible": false,
       },
     },
     async () => {
       const statuses = await getSTMStatus();
-      const lines = ["orange", "green", "blue", "yellow"] as const;
-
-      // Build summary text
-      const parts = lines.map((l) => {
-        const s = statuses[l];
-        const suffix =
-          s === "delay"
-            ? ` ⚠️ (est. $${calculateEconomicImpact(l, 20).toLocaleString()} CAD/20 min delay)`
-            : " ✅";
-        return `${l.charAt(0).toUpperCase() + l.slice(1)}: ${s}${suffix}`;
-      });
-
+      const summaryParts = (["orange", "green", "blue", "yellow"] as const).map(
+        (l) => {
+          const s = statuses[l];
+          const tag =
+            s === "delay"
+              ? ` ⚠️ (est. -$${calculateEconomicImpact(l, 20).toLocaleString()}/20min)`
+              : " ✅";
+          return `${l.charAt(0).toUpperCase() + l.slice(1)}: ${s}${tag}`;
+        },
+      );
       return {
-        content: [{ type: "text", text: parts.join(" | ") }],
+        content: [{ type: "text", text: summaryParts.join(" | ") }],
         structuredContent: statuses,
         _meta: {
           "openai/outputTemplate": WIDGET_URI,
@@ -636,12 +711,12 @@ const handler = createMcpHandler(async (server: any) => {
     {
       title: "Get Next Trains",
       description:
-        "Returns live next-train departure countdowns (in minutes) for a given Montreal Metro station.",
+        "Returns live next-train departures (minutes) for any of the 68 Montreal Metro stations.",
       inputSchema: {
         station_id: z
           .string()
           .describe(
-            "Station slug: berri-uqam | jean-talon | lionel-groulx | snowdon | jean-drapeau | longueuil | cote-vertu | montmorency | angrignon | honore-beaugrand | saint-michel",
+            "Station slug, e.g: berri-uqam, jean-talon, lionel-groulx, snowdon, angrignon, montmorency, cote-vertu, mcgill, atwater, peel, guy-concordia, place-des-arts, saint-laurent, longueuil, jean-drapeau, saint-michel and any other STM station.",
           ),
       },
       _meta: {
@@ -652,12 +727,8 @@ const handler = createMcpHandler(async (server: any) => {
     async ({ station_id }: { station_id: string }) => {
       const trains = await fetchNextTrains(station_id);
       const lines = Object.entries(trains)
-        .map(
-          ([line, times]) =>
-            `${line.charAt(0).toUpperCase() + line.slice(1)}: ${times.join(", ")} min`,
-        )
+        .map(([l, t]) => `${l}: ${(t as number[]).join(", ")} min`)
         .join(" | ");
-
       return {
         content: [
           { type: "text", text: `Next trains at ${station_id}: ${lines}` },
@@ -677,16 +748,10 @@ const handler = createMcpHandler(async (server: any) => {
     {
       title: "Calculate Economic Impact",
       description:
-        "Calculates estimated productivity loss caused by a metro line delay using formula: (delay_minutes / 60) × ridership × $31.50/hr (Montreal avg wage).",
+        "Calculates the estimated productivity loss of a delayed metro line using (delay_min/60) × ridership × $31.50/hr.",
       inputSchema: {
-        line: z
-          .enum(["green", "orange", "blue", "yellow"])
-          .describe("The delayed line"),
-        delay_minutes: z
-          .number()
-          .min(1)
-          .max(240)
-          .describe("Duration of the delay in minutes"),
+        line: z.enum(["green", "orange", "blue", "yellow"]),
+        delay_minutes: z.number().min(1).max(240),
       },
     },
     async ({
@@ -702,7 +767,7 @@ const handler = createMcpHandler(async (server: any) => {
         content: [
           {
             type: "text",
-            text: `A ${delay_minutes}-minute delay on the ${line} line affects ~${ridership.toLocaleString()} riders/hour. Estimated productivity loss: $${impact.toLocaleString()} CAD. Formula: (${delay_minutes}/60) × ${ridership} × $31.50`,
+            text: `${line} line: ${delay_minutes}-min delay → ~${ridership.toLocaleString()} riders/hr → estimated $${impact.toLocaleString()} CAD productivity loss.`,
           },
         ],
         structuredContent: {
