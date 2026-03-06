@@ -20,7 +20,7 @@ type MetroStatus = {
 export default function Home() {
   const toolOutput = useWidgetProps<{
     name?: string;
-    result?: { structuredContent?: MetroStatus };
+    structuredContent?: MetroStatus;
   }>();
   const maxHeight = useMaxHeight() ?? undefined;
   const displayMode = useDisplayMode();
@@ -29,13 +29,9 @@ export default function Home() {
 
   const [lang, setLang] = useState<"en" | "fr">("en");
 
-  // Default statuses to normal if not yet loaded
-  const statuses: MetroStatus = toolOutput?.result?.structuredContent || {
-    orange: "normal",
-    green: "normal",
-    yellow: "normal",
-    blue: "normal",
-  };
+  // Attempt to parse structuredContent from the root of the prop
+  // Fallback to normal if data hasn't arrived
+  const statuses: MetroStatus | null = toolOutput?.structuredContent || null;
 
   const t = {
     title: { en: "Montreal Metro Pulse", fr: "Le Pouls du Métro de Montréal" },
@@ -50,12 +46,18 @@ export default function Home() {
       fr: "En attente des données réseau...",
     },
     chatgptWarning: {
-      en: "This app relies on data from a ChatGPT session. No window.openai property detected.",
-      fr: "Cette application s'appuie sur une session ChatGPT. Aucune propriété window.openai n'est détectée.",
+      en: "This app relies on data from an AI Agent. No window.openai property detected.",
+      fr: "Cette application s'appuie sur un agent d'IA. Aucune propriété window.openai n'est détectée.",
     },
   };
 
-  const hasData = !!toolOutput?.result?.structuredContent;
+  const hasData = !!statuses;
+  const renderStatuses = statuses || {
+    orange: "normal" as const,
+    green: "normal" as const,
+    yellow: "normal" as const,
+    blue: "normal" as const,
+  };
 
   return (
     <div
@@ -130,12 +132,12 @@ export default function Home() {
                 d="M 50 200 L 150 150 L 250 120 L 350 50"
                 fill="none"
                 stroke={
-                  statuses.green === "delay"
+                  renderStatuses.green === "delay"
                     ? "transparent"
                     : "var(--metro-green)"
                 }
                 strokeWidth="8"
-                className={`line-animate ${statuses.green === "delay" ? "line-pulse" : ""}`}
+                className={`line-animate ${renderStatuses.green === "delay" ? "line-pulse" : ""}`}
               />
 
               {/* Orange Line */}
@@ -143,12 +145,12 @@ export default function Home() {
                 d="M 100 280 L 100 200 L 150 100 L 250 120 L 300 250"
                 fill="none"
                 stroke={
-                  statuses.orange === "delay"
+                  renderStatuses.orange === "delay"
                     ? "transparent"
                     : "var(--metro-orange)"
                 }
                 strokeWidth="8"
-                className={`line-animate ${statuses.orange === "delay" ? "line-pulse" : ""}`}
+                className={`line-animate ${renderStatuses.orange === "delay" ? "line-pulse" : ""}`}
               />
 
               {/* Blue Line */}
@@ -156,12 +158,12 @@ export default function Home() {
                 d="M 120 150 L 250 70 L 380 90"
                 fill="none"
                 stroke={
-                  statuses.blue === "delay"
+                  renderStatuses.blue === "delay"
                     ? "transparent"
                     : "var(--metro-blue)"
                 }
                 strokeWidth="8"
-                className={`line-animate ${statuses.blue === "delay" ? "line-pulse" : ""}`}
+                className={`line-animate ${renderStatuses.blue === "delay" ? "line-pulse" : ""}`}
               />
 
               {/* Yellow Line */}
@@ -169,12 +171,12 @@ export default function Home() {
                 d="M 250 120 L 280 180 L 350 220"
                 fill="none"
                 stroke={
-                  statuses.yellow === "delay"
+                  renderStatuses.yellow === "delay"
                     ? "transparent"
                     : "var(--metro-yellow)"
                 }
                 strokeWidth="8"
-                className={`line-animate ${statuses.yellow === "delay" ? "line-pulse" : ""}`}
+                className={`line-animate ${renderStatuses.yellow === "delay" ? "line-pulse" : ""}`}
               />
 
               {/* Major Interchange Stations */}
@@ -273,25 +275,25 @@ export default function Home() {
               {[
                 {
                   name: { en: "Green Line", fr: "Ligne Verte" },
-                  status: statuses.green,
+                  status: renderStatuses.green,
                   color: "bg-[#00874e]",
                   rawName: "green",
                 },
                 {
                   name: { en: "Orange Line", fr: "Ligne Orange" },
-                  status: statuses.orange,
+                  status: renderStatuses.orange,
                   color: "bg-[#ef7d00]",
                   rawName: "orange",
                 },
                 {
                   name: { en: "Blue Line", fr: "Ligne Bleue" },
-                  status: statuses.blue,
+                  status: renderStatuses.blue,
                   color: "bg-[#0056a3]",
                   rawName: "blue",
                 },
                 {
                   name: { en: "Yellow Line", fr: "Ligne Jaune" },
-                  status: statuses.yellow,
+                  status: renderStatuses.yellow,
                   color: "bg-[#ffe400]",
                   rawName: "yellow",
                 },
