@@ -28,10 +28,28 @@ export default function Home() {
   const isChatGptApp = useIsChatGptApp();
 
   const [lang, setLang] = useState<"en" | "fr">("en");
+  const [liveStatuses, setLiveStatuses] = useState<MetroStatus | null>(null);
 
-  // Attempt to parse structuredContent from the root of the prop
-  // Fallback to normal if data hasn't arrived
-  const statuses: MetroStatus | null = toolOutput?.structuredContent || null;
+  useEffect(() => {
+    // If the Athena SDK injects payload directly via mcp-handler hook
+    if (toolOutput?.structuredContent) {
+      setLiveStatuses(toolOutput.structuredContent);
+      return;
+    }
+
+    // Fallback: Fetch real-time status independently if the webhook/iframe injection fails
+    let isMounted = true;
+    fetch("/api/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted) setLiveStatuses(data);
+      })
+      .catch((err) => console.error("Failed to fetch live STM status:", err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [toolOutput]);
 
   const t = {
     title: { en: "Montreal Metro Pulse", fr: "Le Pouls du Métro de Montréal" },
@@ -51,8 +69,8 @@ export default function Home() {
     },
   };
 
-  const hasData = !!statuses;
-  const renderStatuses = statuses || {
+  const hasData = !!liveStatuses;
+  const renderStatuses = liveStatuses || {
     orange: "normal" as const,
     green: "normal" as const,
     yellow: "normal" as const,
@@ -117,145 +135,22 @@ export default function Home() {
 
           {/* Left panel: Map */}
           <div className="flex-1 w-full flex justify-center items-center relative z-10 p-4">
-            {/* 
-              Simplified schematic of the Montreal Metro 
-              Using dynamic classes to trigger pulse on delay
-            */}
-            <svg
-              viewBox="0 0 400 300"
-              className="w-full max-w-lg drop-shadow-xl"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              {/* Green Line */}
-              <path
-                d="M 50 200 L 150 150 L 250 120 L 350 50"
-                fill="none"
-                stroke={
-                  renderStatuses.green === "delay"
-                    ? "transparent"
-                    : "var(--metro-green)"
-                }
-                strokeWidth="8"
-                className={`line-animate ${renderStatuses.green === "delay" ? "line-pulse" : ""}`}
+            <div className="relative w-full max-w-lg aspect-square sm:aspect-video rounded-3xl bg-white/5 border border-white/10 p-4 shadow-2xl flex items-center justify-center overflow-hidden">
+              {/* High-quality real Montreal Metro Map */}
+              <img
+                src="https://upload.wikimedia.org/wikipedia/commons/e/ec/Montreal-metro.svg"
+                alt="STM Real Metro Map"
+                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:scale-105 transition-transform duration-700"
               />
 
-              {/* Orange Line */}
-              <path
-                d="M 100 280 L 100 200 L 150 100 L 250 120 L 300 250"
-                fill="none"
-                stroke={
-                  renderStatuses.orange === "delay"
-                    ? "transparent"
-                    : "var(--metro-orange)"
-                }
-                strokeWidth="8"
-                className={`line-animate ${renderStatuses.orange === "delay" ? "line-pulse" : ""}`}
-              />
-
-              {/* Blue Line */}
-              <path
-                d="M 120 150 L 250 70 L 380 90"
-                fill="none"
-                stroke={
-                  renderStatuses.blue === "delay"
-                    ? "transparent"
-                    : "var(--metro-blue)"
-                }
-                strokeWidth="8"
-                className={`line-animate ${renderStatuses.blue === "delay" ? "line-pulse" : ""}`}
-              />
-
-              {/* Yellow Line */}
-              <path
-                d="M 250 120 L 280 180 L 350 220"
-                fill="none"
-                stroke={
-                  renderStatuses.yellow === "delay"
-                    ? "transparent"
-                    : "var(--metro-yellow)"
-                }
-                strokeWidth="8"
-                className={`line-animate ${renderStatuses.yellow === "delay" ? "line-pulse" : ""}`}
-              />
-
-              {/* Major Interchange Stations */}
-              {/* Lionel-Groulx (Green/Orange) */}
-              <circle
-                cx="100"
-                cy="200"
-                r="10"
-                fill="#fff"
-                stroke="#333"
-                strokeWidth="4"
-              />
-              <text
-                x="70"
-                y="220"
-                fill="currentColor"
-                fontSize="12"
-                className="font-bold drop-shadow-md"
-              >
-                Lionel-Groulx
-              </text>
-
-              {/* Berri-UQAM (Green/Orange/Yellow) */}
-              <circle
-                cx="250"
-                cy="120"
-                r="12"
-                fill="#fff"
-                stroke="#333"
-                strokeWidth="4"
-              />
-              <text
-                x="265"
-                y="115"
-                fill="currentColor"
-                fontSize="12"
-                className="font-bold drop-shadow-md"
-              >
-                Berri-UQAM
-              </text>
-
-              {/* Snowdon (Orange/Blue) */}
-              <circle
-                cx="120"
-                cy="150"
-                r="10"
-                fill="#fff"
-                stroke="#333"
-                strokeWidth="4"
-              />
-              <text
-                x="60"
-                y="145"
-                fill="currentColor"
-                fontSize="12"
-                className="font-bold drop-shadow-md"
-              >
-                Snowdon
-              </text>
-
-              {/* Jean-Talon (Orange/Blue) */}
-              <circle
-                cx="215"
-                cy="85"
-                r="10"
-                fill="#fff"
-                stroke="#333"
-                strokeWidth="4"
-              />
-              <text
-                x="180"
-                y="70"
-                fill="currentColor"
-                fontSize="12"
-                className="font-bold drop-shadow-md"
-              >
-                Jean-Talon
-              </text>
-            </svg>
+              {/* Full-Map Alert Overlay if any lines are disrupted */}
+              {(renderStatuses.orange === "delay" ||
+                renderStatuses.green === "delay" ||
+                renderStatuses.blue === "delay" ||
+                renderStatuses.yellow === "delay") && (
+                <div className="absolute inset-0 border-4 border-red-500/30 rounded-3xl animate-[pulse-alert_2s_ease-in-out_infinite] mix-blend-screen pointer-events-none shadow-[inset_0_0_30px_rgba(239,68,68,0.2)]" />
+              )}
+            </div>
           </div>
 
           {/* Right panel: Legend and Status list */}
