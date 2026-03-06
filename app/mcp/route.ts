@@ -554,71 +554,159 @@ function selectStation(id, label){
   loadDepartures(id);
 }
 
-// ══ DEPARTURES BOARD ══════════════════════════════════════════════════════════
-let depTimer=null;
+// ══ TRANSIT CONFIG: terminals and directional logic ═══════════════════════════
+// Defines the two terminus names for each line, and which stations are terminals
+// (only one direction available) and in which direction.
+const TRANSIT_CONFIG = {
+  // terminus: { a: western/southern end, b: eastern/northern end }
+  terminus: {
+    orange: { a: 'Côte-Vertu',          b: 'Montmorency' },
+    green:  { a: 'Angrignon',            b: 'Honoré-Beaugrand' },
+    blue:   { a: 'Snowdon',              b: 'Saint-Michel' },
+    yellow: { a: 'Berri-UQAM',           b: 'Longueuil–U.-de-S.' },
+  },
+  // terminal stations: { stationId: { line: 'a'|'b' } }
+  // 'a' = this station IS terminus A, so only direction toward B exists
+  // 'b' = this station IS terminus B, so only direction toward A exists
+  terminals: {
+    // Orange Line
+    'cote-vertu':         { orange: 'a' },
+    'montmorency':        { orange: 'b' },
+    // Green Line
+    'angrignon':          { green:  'a' },
+    'honore-beaugrand':   { green:  'b' },
+    // Blue Line
+    'snowdon':            { blue:   'a' },  // as Blue terminus; Orange also serves Snowdon
+    'saint-michel':       { blue:   'b' },
+    // Yellow Line
+    'berri-uqam':         { yellow: 'a' },  // as Yellow terminus; Green & Orange also serve it
+    'longueuil':          { yellow: 'b' },
+    'jean-drapeau':       {},               // intermediate Yellow station – both directions
+  },
+};
 
-function renderBoard(deps, station){
-  window.__departures=deps||{};
-  const board=document.getElementById('dep-board');
-  board.innerHTML='';
-  if(!deps||Object.keys(deps).length===0){
-    board.innerHTML=\`<div class="no-data"><span>\${tx('noData')}</span></div>\`;
+// ══ DEPARTURES BOARD ══════════════════════════════════════════════════════════
+let depTimer = null;
+
+// Build departure time chips HTML
+function buildChips(times) {
+  if (!times || times.length === 0) return '';
+  return times.map(m => \`
+    <div class="dep-chip\${m <= 2 ? ' arriving' : ''}">
+      <span class="minutes">\${m}</span>
+      <span class="min-label">\${tx('min')}</span>
+    </div>\`).join('');
+}
+
+function renderBoard(deps, station) {
+  window.__departures = deps || {};
+  const board = document.getElementById('dep-board');
+  board.innerHTML = '';
+
+  if (!deps || Object.keys(deps).length === 0) {
+    board.innerHTML = \`<div class="no-data"><span>\${tx('noData')}</span></div>\`;
     return;
   }
-  // Determine line terminals for direction labels
-  const TERMINALS={
-    orange:{a:'Côte-Vertu',b:'Montmorency'},
-    green: {a:'Angrignon', b:'Honoré-Beaugrand'},
-    blue:  {a:'Snowdon',   b:'Saint-Michel'},
-    yellow:{a:'Berri-UQAM',b:'Longueuil–U.-de-S.'},
-  };
-  for(const [line, times] of Object.entries(deps)){
-    if(!times||times.length===0) continue;
-    const meta=LINE_META[line];
-    const tc = line==='yellow'?'#0f172a':'#fff';
-    const card=document.createElement('div');card.className='dep-card';
-    const t=TERMINALS[line]||{a:'A',b:'B'};
-    const chips=times.map((m,i)=>\`
-      <div class="dep-chip\${m<=2?' arriving':''}">
-        <span class="minutes">\${m}</span>
-        <span class="min-label">\${tx('min')}</span>
-      </div>\`).join('');
-    card.innerHTML=\`
-      <div class="dep-card-top">
-        <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
-        <span class="dep-direction">\${tx('toward')} \${t.b}</span>
-      </div>
-      <div class="dep-chips">\${chips}</div>\`;
-    board.appendChild(card);
+
+  const termConfig = TRANSIT_CONFIG.terminals[station] || {};
+
+  for (const [line, times] of Object.entries(deps)) {
+    if (!times || times.length === 0) continue;
+
+    const meta   = LINE_META[line];
+    const tc     = line === 'yellow' ? '#0f172a' : '#fff';
+    const term   = TRANSIT_CONFIG.terminus[line] || { a: '?', b: '?' };
+    const isTermA = termConfig[line] === 'a'; // this station IS terminus A
+    const isTermB = termConfig[line] === 'b'; // this station IS terminus B
+
+    if (isTermA) {
+      // Terminal A: only trains toward B
+      const card = document.createElement('div'); card.className = 'dep-card';
+      card.innerHTML = \`
+        <div class="dep-card-top">
+          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
+          <span class="dep-direction">\${tx('toward')} \${term.b}</span>
+        </div>
+        <div class="dep-chips">\${buildChips(times)}</div>\`;
+      board.appendChild(card);
+
+    } else if (isTermB) {
+      // Terminal B: only trains toward A
+      const card = document.createElement('div'); card.className = 'dep-card';
+      card.innerHTML = \`
+        <div class="dep-card-top">
+          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
+          <span class="dep-direction">\${tx('toward')} \${term.a}</span>
+        </div>
+        <div class="dep-chips">\${buildChips(times)}</div>\`;
+      board.appendChild(card);
+
+    } else {
+      // Intermediate station: show BOTH directions with offset times
+      // Direction toward B (higher minute index trains)
+      const towardB = times;
+      // Direction toward A: slightly offset (simulated opposite platform)
+      const offset = Math.floor(Math.random() * 3) + 2;
+      const towardA = times.map(m => Math.max(1, m + offset - 1));
+
+      const cardB = document.createElement('div'); cardB.className = 'dep-card';
+      cardB.innerHTML = \`
+        <div class="dep-card-top">
+          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
+          <span class="dep-direction">→ \${term.b}</span>
+        </div>
+        <div class="dep-chips">\${buildChips(towardB)}</div>\`;
+      board.appendChild(cardB);
+
+      const cardA = document.createElement('div'); cardA.className = 'dep-card';
+      cardA.innerHTML = \`
+        <div class="dep-card-top">
+          <span class="dep-line-badge" style="background:\${meta.color};color:\${tc}">\${meta.label[lang]}</span>
+          <span class="dep-direction">← \${term.a}</span>
+        </div>
+        <div class="dep-chips">\${buildChips(towardA)}</div>\`;
+      board.appendChild(cardA);
+    }
   }
 }
 
-function loadDepartures(stationId){
-  const board=document.getElementById('dep-board');
-  board.innerHTML='<div class="no-data"><div class="spinner"></div></div>';
+function loadDepartures(stationId) {
+  const board = document.getElementById('dep-board');
+  board.innerHTML = '<div class="no-data"><div class="spinner"></div></div>';
 
-  // Simulate per-station departures (replaced by real data from window.openai)
-  const stationLines=[];
-  for(const [line,stations] of Object.entries(ALL_STATIONS)){
-    if(stations.some(s=>s.id===stationId)) stationLines.push(line);
+  // Find which lines serve this station
+  const stationLines = [];
+  for (const [line, stations] of Object.entries(ALL_STATIONS)) {
+    if (stations.some(s => s.id === stationId)) stationLines.push(line);
   }
-  const deps={};
-  for(const l of stationLines){
-    const t1=Math.floor(Math.random()*5)+1;
-    const t2=t1+Math.floor(Math.random()*7)+4;
-    const t3=t2+Math.floor(Math.random()*6)+4;
-    deps[l]=[t1,t2,t3];
-  }
-  renderBoard(deps,stationId);
 
-  // Live tick: decrement every 60s and refresh
+  // Simulate realistic departure times
+  const deps = {};
+  for (const l of stationLines) {
+    const t1 = Math.floor(Math.random() * 5) + 1;
+    const t2 = t1 + Math.floor(Math.random() * 7) + 4;
+    const t3 = t2 + Math.floor(Math.random() * 6) + 4;
+    deps[l] = [t1, t2, t3];
+  }
+  renderBoard(deps, stationId);
+
+  // Live tick: minutes count down every real minute
   clearInterval(depTimer);
-  depTimer=setInterval(()=>{
-    for(const l of Object.keys(window.__departures)){
-      window.__departures[l]=window.__departures[l].map(m=>Math.max(0,m-1));
+  depTimer = setInterval(() => {
+    for (const l of Object.keys(window.__departures)) {
+      window.__departures[l] = window.__departures[l].map(m => {
+        m = m - 1;
+        // When a train departs (hits 0), pop it and add a new one at the back
+        if (m <= 0) {
+          const last = window.__departures[l][window.__departures[l].length - 1];
+          window.__departures[l].push(last + Math.floor(Math.random() * 6) + 4);
+          return null; // mark for removal
+        }
+        return m;
+      }).filter(m => m !== null);
     }
     renderBoard(window.__departures, stationId);
-  },60000);
+  }, 60000);
 }
 
 // ══ BOOT ══════════════════════════════════════════════════════════════════════
